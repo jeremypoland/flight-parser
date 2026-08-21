@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0f">
+<title>Flight Parser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: #2a2a3a;
+    --accent: #4f8eff;
+    --accent2: #7b5ea7;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --light: #c0c0cc;
+    --success: #3ecf8e;
+    --mono: 'DM Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(79,142,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,142,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* Header */
+  .header {
+    margin-bottom: 40px;
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+  }
+  .header-icon {
+    font-size: 38px;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .header-text h1 {
+    font-family: var(--display);
+    font-size: clamp(26px, 5vw, 38px);
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1;
+    background: linear-gradient(135deg, #fff 30%, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+  }
+  .header-text p { color: var(--muted); font-size: 15px; line-height: 1.6; }
+
+  /* Card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), transparent);
+  }
+  .field-label {
+    font-family: var(--display);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+    display: block;
+  }
+  .field-hint { font-size: 13px; color: var(--muted); margin-bottom: 8px; display: block; }
+  input[type="text"], textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 15px;
+    padding: 11px 13px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
+  input::placeholder, textarea::placeholder { color: var(--muted); }
+  textarea { resize: vertical; min-height: 130px; line-height: 1.6; }
+  .field-gap { margin-top: 16px; }
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .btn-parse {
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    background: var(--accent);
+    color: #fff;
+    width: 100%;
+    margin-top: 18px;
+    transition: all 0.2s;
+  }
+  .btn-parse:hover:not(:disabled) {
+    background: #6ba3ff;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(79,142,255,0.25);
+  }
+  .btn-parse:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* Loading */
+  .loading {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 15px;
+    padding: 20px 0;
+    justify-content: center;
+  }
+  .loading.active { display: flex; }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Error */
+  .error-box {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 10px;
+    padding: 13px 16px;
+    color: #f87171;
+    font-size: 15px;
+    line-height: 1.6;
+    display: none;
+    margin-bottom: 16px;
+  }
+  .error-box.active { display: block; }
+
+  /* Results */
+  .results { display: none; flex-direction: column; gap: 14px; }
+  .results.active { display: flex; }
+
+  /* Output block */
+  .output-block { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .output-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .output-title { font-family: var(--display); font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .output-body { padding: 20px 22px; }
+
+  /* Big copy button */
+  .btn-copy-big {
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 16px 32px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    background: var(--success);
+    color: #000;
+    width: 100%;
+    transition: all 0.2s;
+  }
+  .btn-copy-big:hover {
+    background: #5ddfaa;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(62,207,142,0.3);
+  }
+  .btn-copy-big.copied {
+    background: var(--surface2);
+    color: var(--success);
+    border: 1px solid var(--success);
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Small copy button for header */
+  .btn-copy-sm {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+  }
+  .btn-copy-sm:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-copy-sm.copied { border-color: var(--success); color: var(--success); }
+
+  /* Plain text output */
+  .plain-text {
+    font-family: var(--mono);
+    font-size: 16px;
+    line-height: 2;
+    color: var(--text);
+    white-space: pre;
+    word-break: break-word;
+    margin-bottom: 20px;
+  }
+  .plain-text .date-line  { color: var(--accent); font-weight: 500; }
+  .plain-text .route-line { color: #fff; font-weight: 500; }
+  .plain-text .time-line  { color: var(--light); }
+  .plain-text .num-line   { color: var(--light); }
+  .plain-text .link-label { color: var(--muted); }
+  .plain-text .link-line  { color: var(--accent2); }
+
+  /* ICS section */
+  .ics-list { display: flex; flex-direction: column; gap: 8px; }
+  .ics-row {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: border-color 0.2s;
+  }
+  .ics-row:hover { border-color: var(--accent); }
+  .ics-info { flex: 1; min-width: 0; }
+  .ics-name { font-size: 15px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+  .ics-sub { font-size: 13px; color: var(--muted); }
+  .ics-tag {
+    font-size: 11px;
+    padding: 2px 6px;
+    background: rgba(79,142,255,0.1);
+    color: var(--accent);
+    border-radius: 4px;
+    font-family: var(--display);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+  }
+  .btn-dl {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 7px;
+    border: 1px solid rgba(62,207,142,0.3);
+    background: rgba(62,207,142,0.07);
+    color: var(--success);
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .btn-dl:hover { background: rgba(62,207,142,0.15); border-color: var(--success); }
+
+  @media (max-width: 600px) {
+    .container { padding: 28px 16px 60px; }
+    .header { gap: 12px; margin-bottom: 28px; }
+    .header-icon { font-size: 30px; }
+    .header-text h1 { font-size: 28px; }
+    .header-text p { font-size: 13px; }
+    .card { padding: 18px 16px; }
+    .field-label { font-size: 11px; }
+    .field-hint { font-size: 12px; }
+    input[type="text"], textarea { font-size: 16px; } /* prevent iOS zoom */
+    .btn-parse { font-size: 17px; padding: 16px; }
+    .btn-copy-big { font-size: 18px; padding: 18px; }
+    .plain-text { font-size: 15px; line-height: 1.9; }
+    .output-body { padding: 16px; }
+    .ics-name { font-size: 14px; }
+    .ics-sub { font-size: 12px; }
+    .output-header { padding: 10px 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-icon">✈️</div>
+    <div class="header-text">
+      <h1>Flight Parser</h1>
+      <p>Paste a Google Flights link and itinerary text to generate a clean plain-text summary and .ICS calendar files.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <label class="field-label">Google Flights Link</label>
+    <input type="text" id="flightsUrl" placeholder="https://www.google.com/travel/flights/s/..." />
+
+    <div class="field-gap">
+      <label class="field-label">Itinerary Text</label>
+      <span class="field-hint">Copy all text from the Google Flights page and paste here.</span>
+      <textarea id="itineraryText" placeholder="Wed, Apr 22&#10;BNA to DFW&#10;11:15 AM - 1:29 PM&#10;American Airlines AA 2876&#10;..."></textarea>
+    </div>
+
+    <button class="btn-parse" id="parseBtn" onclick="parseFlights()">Parse Flights</button>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <span>Parsing itinerary...</span>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="results" id="results">
+
+    <div class="output-block">
+      <div class="output-header">
+        <span class="output-title">Plain Text Output</span>
+        <button class="btn-copy-sm" id="copySmBtn" onclick="copyText(true)">Copy</button>
+      </div>
+      <div class="output-body">
+        <div class="plain-text" id="plainTextOutput"></div>
+        <button class="btn-copy-big" id="copyBigBtn" onclick="copyText(false)">Copy to Clipboard</button>
+      </div>
+    </div>
+
+    <div class="output-block">
+      <div class="output-header">
+        <span class="output-title">Calendar File (.ICS)</span>
+        <button class="btn-dl" id="dlAllBtn" onclick="downloadICS()">Download</button>
+      </div>
+      <div class="output-body">
+        <div class="ics-list" id="icsList"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const AIRPORTS = {
+  BNA:{name:"Nashville International Airport",address:"1 Terminal Dr, Nashville, TN 37214"},
+  DFW:{name:"Dallas/Fort Worth International Airport",address:"2400 Aviation Dr, DFW Airport, TX 75261"},
+  SNA:{name:"John Wayne Airport",address:"18601 Airport Way, Santa Ana, CA 92707"},
+  CLT:{name:"Charlotte Douglas International Airport",address:"5501 Josh Birmingham Pkwy, Charlotte, NC 28208"},
+  LAX:{name:"Los Angeles International Airport",address:"1 World Way, Los Angeles, CA 90045"},
+  JFK:{name:"John F. Kennedy International Airport",address:"Queens, NY 11430"},
+  LGA:{name:"LaGuardia Airport",address:"Queens, NY 11371"},
+  EWR:{name:"Newark Liberty International Airport",address:"3 Brewster Rd, Newark, NJ 07114"},
+  ORD:{name:"O'Hare International Airport",address:"10000 W O'Hare Ave, Chicago, IL 60666"},
+  MDW:{name:"Chicago Midway International Airport",address:"5700 S Cicero Ave, Chicago, IL 60638"},
+  ATL:{name:"Hartsfield-Jackson Atlanta International Airport",address:"6000 N Terminal Pkwy, Atlanta, GA 30320"},
+  MIA:{name:"Miami International Airport",address:"2100 NW 42nd Ave, Miami, FL 33142"},
+  MCO:{name:"Orlando International Airport",address:"1 Jeff Fuqua Blvd, Orlando, FL 32827"},
+  SFO:{name:"San Francisco International Airport",address:"San Francisco, CA 94128"},
+  SEA:{name:"Seattle-Tacoma International Airport",address:"17801 International Blvd, SeaTac, WA 98188"},
+  DEN:{name:"Denver International Airport",address:"8500 Pena Blvd, Denver, CO 80249"},
+  PHX:{name:"Phoenix Sky Harbor International Airport",address:"3400 E Sky Harbor Blvd, Phoenix, AZ 85034"},
+  LAS:{name:"Harry Reid International Airport",address:"5757 Wayne Newton Blvd, Las Vegas, NV 89119"},
+  MSP:{name:"Minneapolis-Saint Paul International Airport",address:"4300 Glumack Dr, St Paul, MN 55111"},
+  DTW:{name:"Detroit Metropolitan Wayne County Airport",address:"11050 W G Mannino Dr, Detroit, MI 48242"},
+  PHL:{name:"Philadelphia International Airport",address:"8000 Essington Ave, Philadelphia, PA 19153"},
+  BOS:{name:"Boston Logan International Airport",address:"1 Harborside Dr, Boston, MA 02128"},
+  IAH:{name:"George Bush Intercontinental Airport",address:"2800 N Terminal Rd, Houston, TX 77032"},
+  HOU:{name:"William P. Hobby Airport",address:"7800 Airport Blvd, Houston, TX 77061"},
+  BWI:{name:"Baltimore/Washington International Airport",address:"7050 Friendship Rd, Baltimore, MD 21240"},
+  DCA:{name:"Ronald Reagan Washington National Airport",address:"1 Aviation Cir, Arlington, VA 22202"},
+  IAD:{name:"Washington Dulles International Airport",address:"1 Saarinen Cir, Dulles, VA 20166"},
+  PDX:{name:"Portland International Airport",address:"7000 NE Airport Way, Portland, OR 97218"},
+  SLC:{name:"Salt Lake City International Airport",address:"776 N Terminal Dr, Salt Lake City, UT 84122"},
+  SAN:{name:"San Diego International Airport",address:"3225 N Harbor Dr, San Diego, CA 92101"},
+  MEM:{name:"Memphis International Airport",address:"2491 Winchester Rd, Memphis, TN 38116"},
+  MSY:{name:"Louis Armstrong New Orleans International Airport",address:"900 Airline Dr, Kenner, LA 70062"},
+  STL:{name:"St. Louis Lambert International Airport",address:"10701 Lambert International Blvd, St. Louis, MO 63145"},
+  CLE:{name:"Cleveland Hopkins International Airport",address:"5300 Riverside Dr, Cleveland, OH 44135"},
+  PIT:{name:"Pittsburgh International Airport",address:"1000 Airport Blvd, Pittsburgh, PA 15231"},
+  MCI:{name:"Kansas City International Airport",address:"1 International Square, Kansas City, MO 64153"},
+  RDU:{name:"Raleigh-Durham International Airport",address:"2400 John Brantley Blvd, Morrisville, NC 27560"},
+  TPA:{name:"Tampa International Airport",address:"4100 George J. Bean Pkwy, Tampa, FL 33607"},
+  RSW:{name:"Southwest Florida International Airport",address:"11000 Terminal Access Rd, Fort Myers, FL 33913"},
+  FLL:{name:"Fort Lauderdale-Hollywood International Airport",address:"100 Terminal Dr, Fort Lauderdale, FL 33315"},
+  PBI:{name:"Palm Beach International Airport",address:"1000 James L. Turnage Blvd, West Palm Beach, FL 33415"},
+  JAX:{name:"Jacksonville International Airport",address:"2400 Yankee Clipper Dr, Jacksonville, FL 32218"},
+  SAV:{name:"Savannah/Hilton Head International Airport",address:"400 Airways Ave, Savannah, GA 31408"},
+  OAK:{name:"Oakland International Airport",address:"1 Airport Dr, Oakland, CA 94621"},
+  SJC:{name:"Norman Y. Mineta San Jose International Airport",address:"1701 Airport Blvd, San Jose, CA 95110"},
+  SMF:{name:"Sacramento International Airport",address:"6900 Airport Blvd, Sacramento, CA 95837"},
+  ABQ:{name:"Albuquerque International Sunport",address:"2200 Sunport Blvd SE, Albuquerque, NM 87106"},
+  IND:{name:"Indianapolis International Airport",address:"7800 Col. H. Weir Cook Memorial Dr, Indianapolis, IN 46241"},
+  CMH:{name:"John Glenn Columbus International Airport",address:"4600 International Gateway, Columbus, OH 43219"},
+  SDF:{name:"Louisville Muhammad Ali International Airport",address:"600 Terminal Dr, Louisville, KY 40209"},
+  BHM:{name:"Birmingham-Shuttlesworth International Airport",address:"2600 Rental Car Dr, Birmingham, AL 35212"},
+  HSV:{name:"Huntsville International Airport",address:"1000 Glenn Hearn Blvd, Huntsville, AL 35824"},
+  SAT:{name:"San Antonio International Airport",address:"9800 Airport Blvd, San Antonio, TX 78216"},
+  AUS:{name:"Austin-Bergstrom International Airport",address:"3600 Presidential Blvd, Austin, TX 78719"},
+  DAL:{name:"Dallas Love Field",address:"8008 Herb Kelleher Way, Dallas, TX 75235"},
+  LHR:{name:"Heathrow Airport",address:"Longford, Hounslow TW6 1EW, UK"},
+  LGW:{name:"Gatwick Airport",address:"Horley RH6 0NP, UK"},
+  CDG:{name:"Charles de Gaulle Airport",address:"95700 Roissy-en-France, France"},
+  AMS:{name:"Amsterdam Airport Schiphol",address:"Evert van de Beekstraat 202, 1118 CP Schiphol, Netherlands"},
+  FRA:{name:"Frankfurt Airport",address:"60547 Frankfurt am Main, Germany"},
+  MAD:{name:"Adolfo Suarez Madrid-Barajas Airport",address:"28042 Madrid, Spain"},
+  BCN:{name:"Josep Tarradellas Barcelona-El Prat Airport",address:"El Prat de Llobregat, 08820 Barcelona, Spain"},
+  FCO:{name:"Leonardo da Vinci-Fiumicino Airport",address:"Via dell'Aeroporto di Fiumicino, 00054 Fiumicino RM, Italy"},
+  DXB:{name:"Dubai International Airport",address:"Airport Road, Dubai, UAE"},
+  NRT:{name:"Narita International Airport",address:"1-1 Furugome, Narita, Chiba 282-0004, Japan"},
+  HND:{name:"Tokyo Haneda Airport",address:"3-3-2 Hanedakuko, Ota City, Tokyo 144-0041, Japan"},
+  ICN:{name:"Incheon International Airport",address:"272 Gonghang-ro, Jung-gu, Incheon, South Korea"},
+  SYD:{name:"Sydney Airport",address:"Airport Dr, Mascot NSW 2020, Australia"},
+  MEX:{name:"Mexico City International Airport",address:"Cap. Carlos Leon s/n, Penon de los Banos, 15620 CDMX, Mexico"},
+  CUN:{name:"Cancun International Airport",address:"Carr. Cancun-Playa del Carmen, Cancun, Q.R., Mexico"},
+  YYZ:{name:"Toronto Pearson International Airport",address:"6301 Silver Dart Dr, Mississauga, ON L5P 1B2, Canada"},
+  YVR:{name:"Vancouver International Airport",address:"3211 Grant McConachie Way, Richmond, BC V7B 0A4, Canada"},
+  YUL:{name:"Montreal-Pierre Elliott Trudeau International Airport",address:"975 Boul. Romeo-Vachon N, Dorval, QC H4Y 1H1, Canada"},
+  BOG:{name:"El Dorado International Airport",address:"Av. El Dorado No. 103-08, Bogota, Colombia"},
+  PTY:{name:"Tocumen International Airport",address:"Ciudad de Panama, Panama"},
+  SJO:{name:"Juan Santamaria International Airport",address:"Alajuela, Costa Rica"},
+  GRU:{name:"Sao Paulo/Guarulhos International Airport",address:"Rod. Helio Smidt, s/n - Cumbica, Guarulhos - SP, Brazil"},
+};
+
+var parsedFlights = [];
+var parsedDays = [];
+var flightsUrl = '';
+var combinedICS = '';
+
+async function parseFlights() {
+  var urlInput  = document.getElementById('flightsUrl').value.trim();
+  var textInput = document.getElementById('itineraryText').value.trim();
+
+  if (!textInput) { showError('Please paste itinerary text from Google Flights.'); return; }
+
+  flightsUrl = urlInput;
+  hideError();
+  setLoading(true);
+  hideResults();
+
+  var prompt = 'You are a flight itinerary parser. Extract every individual flight segment and return a JSON object ONLY. No markdown, no explanation, no backticks, no extra text.\n\nReturn this exact structure:\n{"days":[{"date":"Monday October 19","segments":[{"origin":"BNA","destination":"JFK","departureTime":"1:59pm","arrivalTime":"5:35pm","arrivalNextDay":false,"flightNumber":"DL 4662"},{"origin":"JFK","destination":"MAD","departureTime":"8:35pm","arrivalTime":"9:55am","arrivalNextDay":true,"flightNumber":"DL 126"}]}]}\n\nRules:\n- "date": full day name, full month name, day number, e.g. "Monday October 19". No year.\n- Each segment is ONE flight leg with its own times and flight number.\n- "departureTime" and "arrivalTime": 12-hour format, lowercase am/pm, no space. e.g. "1:59pm", "9:55am".\n- "arrivalNextDay": true if the arrival is on the calendar day after departure (overnight flight), otherwise false.\n- "flightNumber": airline code + flight number, e.g. "DL 4662".\n- Times are exactly as shown (local airport time). Do not convert time zones.\n- "origin" and "destination" are IATA 3-letter airport codes.\n\nFor the plain-text summary also include:\n{"summary":[{"date":"Monday October 19","stops":["BNA","JFK","MAD"],"departureTime":"1:59pm","arrivalTime":"9:55am","flightNumbers":["DL 4662","DL 126"]}]}\n\nReturn both "days" and "summary" arrays in the same JSON object.\n\nItinerary:\n' + textInput;
+
+  try {
+    var controller = new AbortController();
+    var timeout = setTimeout(function(){ controller.abort(); }, 20000);
+
+    var response;
+    try {
+      response = await fetch('/api/parse', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: prompt })
+      });
+    } catch (fetchErr) {
+      if (fetchErr.name === 'AbortError') {
+        throw new Error('Request timed out.');
+      }
+      throw new Error('Network error: ' + fetchErr.message);
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      var err = await response.json().catch(function(){ return {}; });
+      throw new Error(err.error || 'API error ' + response.status);
+    }
+
+    var data  = await response.json();
+    var text  = data.content.map(function(i){ return i.text || ''; }).join('');
+    var clean = text.replace(/```json|```/g, '').trim();
+    var parsed = JSON.parse(clean);
+
+    parsedFlights = parsed.summary || [];
+    parsedDays    = parsed.days    || [];
+    if (!parsedDays.length) throw new Error('No flights found. Try pasting more of the Google Flights page content.');
+
+    renderResults();
+  } catch (err) {
+    showError('Error: ' + err.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function renderResults() {
+  renderPlainText();
+  renderICS();
+  showResults();
+}
+
+function buildPlainText() {
+  var lines = [];
+  parsedFlights.forEach(function(f, i) {
+    if (i > 0) lines.push('');
+    lines.push(f.date);
+    lines.push(f.stops.join(' > '));
+    lines.push(f.departureTime + ' - ' + f.arrivalTime);
+    lines.push(f.flightNumbers.join(' + '));
+  });
+  if (flightsUrl) {
+    lines.push('');
+    lines.push('Google Flights Link:');
+    lines.push(flightsUrl);
+  }
+  return lines;
+}
+
+function renderPlainText() {
+  var lines = buildPlainText();
+  var el = document.getElementById('plainTextOutput');
+  el.innerHTML = lines.map(function(l) {
+    var e = escHtml(l);
+    if (/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/.test(l))
+      return '<span class="date-line">' + e + '</span>';
+    if (/ > /.test(l) && !/am|pm/i.test(l) && !/google/i.test(l) && !/^http/.test(l))
+      return '<span class="route-line">' + e + '</span>';
+    if (/ - /.test(l) && /am|pm/i.test(l))
+      return '<span class="time-line">' + e + '</span>';
+    if (l === 'Google Flights Link:')
+      return '<span class="link-label">' + e + '</span>';
+    if (/^https?:\/\//.test(l))
+      return '<span class="link-line">' + e + '</span>';
+    if (l.trim() !== '')
+      return '<span class="num-line">' + e + '</span>';
+    return e;
+  }).join('\n');
+}
+
+function renderICS() {
+  var list = document.getElementById('icsList');
+  list.innerHTML = '';
+  var events = [];
+
+  parsedDays.forEach(function(day) {
+    day.segments.forEach(function(seg, idx) {
+      var title   = 'Flight: ' + seg.origin + ' > ' + seg.destination + ' - ' + seg.flightNumber;
+      var airport = AIRPORTS[seg.origin] || { name: seg.origin + ' Airport', address: '' };
+      var addAlert = (idx === 0);
+      events.push(makeEvent(title, day.date, seg.departureTime, seg.arrivalTime, seg.arrivalNextDay, airport, seg.origin, seg.destination, seg.flightNumber, addAlert));
+
+      var row = document.createElement('div');
+      row.className = 'ics-row';
+      row.innerHTML =
+        '<div class="ics-info">' +
+          '<div class="ics-name">' + escHtml(title) + '</div>' +
+          '<div class="ics-sub">' + escHtml(day.date) + ' &nbsp;|&nbsp; ' + escHtml(seg.departureTime) + ' - ' + escHtml(seg.arrivalTime) + (seg.arrivalNextDay ? ' +1' : '') + '</div>' +
+        '</div>' +
+        '<span class="ics-tag">ICS</span>';
+      list.appendChild(row);
+    });
+  });
+
+  combinedICS = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Flight Parser//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n' +
+    events.join('\r\n') + '\r\nEND:VCALENDAR';
+}
+
+function makeEvent(title, dateStr, depTime, arrTime, arrivalNextDay, airport, origin, dest, flightNum, addAlert) {
+  var MONTHS = {January:1,February:2,March:3,April:4,May:5,June:6,July:7,August:8,September:9,October:10,November:11,December:12};
+  var parts = dateStr.split(' ');
+  var monthName = parts.filter(function(p){ return MONTHS[p]; })[0];
+  var dayNum = parseInt(parts.filter(function(p){ return /^\d{1,2}$/.test(p); })[0]);
+  var year = parseInt(parts.filter(function(p){ return /^\d{4}$/.test(p); })[0] || new Date().getFullYear());
+  var month = MONTHS[monthName] || 1;
+
+  function toHHMMSS(t) {
+    if (!t) return '000000';
+    var s = t.toLowerCase().replace(/\s/g, '');
+    var pm = s.indexOf('pm') !== -1;
+    var am = s.indexOf('am') !== -1;
+    var nums = s.replace(/[apm]/g, '');
+    var p2 = nums.split(':');
+    var h = parseInt(p2[0]);
+    var mm = p2[1] || '00';
+    if (pm && h !== 12) h += 12;
+    if (am && h === 12) h = 0;
+    return String(h).padStart(2,'0') + String(mm).padStart(2,'0') + '00';
+  }
+
+  function pad(n) { return String(n).padStart(2,'0'); }
+
+  // Build arrival date, rolling over to next day if needed
+  var depDate = new Date(year, month - 1, dayNum);
+  var arrDate = new Date(depDate);
+  if (arrivalNextDay) arrDate.setDate(arrDate.getDate() + 1);
+
+  var depDs = String(arrDate.getFullYear() === depDate.getFullYear() ? year : arrDate.getFullYear()) + pad(month) + pad(dayNum);
+  // Recalculate depDs cleanly from depDate
+  depDs = String(depDate.getFullYear()) + pad(depDate.getMonth()+1) + pad(depDate.getDate());
+  var arrDs = String(arrDate.getFullYear()) + pad(arrDate.getMonth()+1) + pad(arrDate.getDate());
+
+  var uid = 'flight-' + origin + '-' + dest + '-' + depDs + '-' + Math.random().toString(36).slice(2) + '@flightparser';
+  var now = new Date().toISOString().replace(/[-:.]/g,'').slice(0,15) + 'Z';
+  // LOCATION: comma-separated so it's valid ICS and tappable as an address
+  var loc = airport.address ? airport.name + ', ' + airport.address : airport.name;
+  var desc = 'Flight ' + flightNum + '\\n' + origin + ' to ' + dest + '\\nDeparture: ' + depTime + '\\nArrival: ' + arrTime + (arrivalNextDay ? ' (+1 day)' : '');
+
+  var lines = [
+    'BEGIN:VEVENT',
+    'UID:' + uid,
+    'DTSTAMP:' + now,
+    'DTSTART:' + depDs + 'T' + toHHMMSS(depTime),
+    'DTEND:'   + arrDs + 'T' + toHHMMSS(arrTime),
+    'SUMMARY:' + title,
+    'LOCATION:' + loc,
+    'DESCRIPTION:' + desc
+  ];
+  if (addAlert) {
+    lines.push('BEGIN:VALARM');
+    lines.push('TRIGGER:-PT2H');
+    lines.push('ACTION:DISPLAY');
+    lines.push('DESCRIPTION:Flight departs in 2 hours');
+    lines.push('END:VALARM');
+  }
+  lines.push('END:VEVENT');
+  return lines.join('\r\n');
+}
+
+function downloadICS() {
+  if (!combinedICS) return;
+  var blob = new Blob([combinedICS], { type: 'text/calendar;charset=utf-8' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url;
+  a.download = 'flights.ics';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function copyText(fromHeader) {
+  var text = buildPlainText().join('\n');
+  navigator.clipboard.writeText(text).then(function() {
+    var ids = fromHeader ? ['copySmBtn'] : ['copyBigBtn', 'copySmBtn'];
+    ids.forEach(function(id) {
+      var b = document.getElementById(id);
+      if (!b) return;
+      var orig = b.textContent;
+      b.textContent = 'Copied!';
+      b.classList.add('copied');
+      setTimeout(function(){ b.textContent = orig; b.classList.remove('copied'); }, 1800);
+    });
+  });
+}
+
+function setLoading(v) {
+  document.getElementById('loading').classList.toggle('active', v);
+  document.getElementById('parseBtn').disabled = v;
+}
+function showResults()  { document.getElementById('results').classList.add('active'); }
+function hideResults()  { document.getElementById('results').classList.remove('active'); }
+function showError(msg) { var b = document.getElementById('errorBox'); b.textContent = msg; b.classList.add('active'); }
+function hideError()    { document.getElementById('errorBox').classList.remove('active'); }
+function escHtml(s)     { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
